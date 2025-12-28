@@ -12,7 +12,7 @@
       </div>
       <div v-else class="placeholder">
         <span v-if="presetType === 'custom'">Name your items and click "Pick Random" to select one at random.</span>
-        <span v-else>Configure a preset and click "Pick Random" to generate a random result.</span>
+        <span v-else>Choose a type and click "Pick Random" to generate a random result.</span>
       </div>
     </div>
 
