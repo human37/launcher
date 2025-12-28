@@ -1,5 +1,5 @@
 <template>
-  <div id="app" class="min-h-screen bg-gradient-to-br from-yellow-100 to-pink-100">
+  <div id="app" class="min-h-screen">
     <div class="container mx-auto px-4 py-0">
       <header class="mb-8">
         <h1 class="app-title">Launcher</h1>
@@ -119,6 +119,11 @@ const closeForm = () => {
   letter-spacing: -0.02em;
 }
 
+body { 
+  margin: 0 !important; 
+  padding: 0 !important;
+}
+
 .app-subtitle {
   font-size: 1.25rem;
   font-weight: 600;
@@ -187,7 +192,7 @@ const closeForm = () => {
 }
 
 .add-button {
-  background: #000;
+  background: #9C27B0;
   color: white;
   box-shadow: 4px 4px 0px 0px #000;
 }

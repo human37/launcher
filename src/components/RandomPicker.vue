@@ -3,42 +3,93 @@
     <h2 class="picker-title">Random Picker</h2>
     
     <div class="picker-display">
-        <div v-if="isPicking" class="picking-animation">
-          <div class="spinner">🎲</div>
-          <div>Picking...</div>
-        </div>
-        <div v-else-if="selectedItem" class="selected-item">
-          {{ selectedItem }}
-        </div>
-        <div v-else class="placeholder">
-          Name your items and click "Pick Random" to select one at random.
-        </div>
+      <div v-if="isPicking" class="picking-animation">
+        <div class="spinner">🎲</div>
+        <div>Picking...</div>
       </div>
+      <div v-else-if="selectedItem" class="selected-item">
+        {{ selectedItem }}
+      </div>
+      <div v-else class="placeholder">
+        <span v-if="presetType === 'custom'">Name your items and click "Pick Random" to select one at random.</span>
+        <span v-else>Configure a preset and click "Pick Random" to generate a random result.</span>
+      </div>
+    </div>
 
-      <div class="picker-controls">
-      <div class="items-list" ref="itemsListRef">
-        <div
-          v-for="(item, index) in items"
-          :key="index"
-          class="item-row"
-        >
-          <input
-            v-model="items[index]"
-            type="text"
-            class="item-input"
-            :placeholder="`Item ${index + 1}`"
-          />
-          <button
-            @click="removeItem(index)"
-            class="remove-button"
-          >
-            ×
-          </button>
+    <div class="preset-controls">
+      <div class="preset-options">
+        <div class="preset-option">
+          <label class="preset-label">Type:</label>
+          <select v-model="presetType" class="preset-select">
+            <option value="number">Random Number</option>
+            <option value="custom">Custom Items</option>
+            <option value="coin">Coin Flip</option>
+            <option value="dice">Dice Roll</option>
+          </select>
+        </div>
+
+        <!-- Custom Items -->
+        <div v-if="presetType === 'custom'" class="picker-controls">
+          <div class="items-list" ref="itemsListRef">
+            <div
+              v-for="(item, index) in items"
+              :key="index"
+              class="item-row"
+            >
+              <input
+                v-model="items[index]"
+                type="text"
+                class="item-input"
+                :placeholder="`Item ${index + 1}`"
+              />
+              <button
+                @click="removeItem(index)"
+                class="remove-button"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Number Range -->
+        <div v-if="presetType === 'number'" class="preset-config">
+          <div class="range-inputs">
+            <div class="range-input-group">
+              <label class="range-label">Min:</label>
+              <input
+                v-model.number="numberMin"
+                type="number"
+                class="range-input"
+                placeholder="0"
+              />
+            </div>
+            <div class="range-input-group">
+              <label class="range-label">Max:</label>
+              <input
+                v-model.number="numberMax"
+                type="number"
+                class="range-input"
+                placeholder="100"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- Coin Flip Info -->
+        <div v-if="presetType === 'coin'" class="preset-info">
+          <p>Heads or Tails</p>
+        </div>
+
+        <!-- Dice Roll Info -->
+        <div v-if="presetType === 'dice'" class="preset-info">
+          <p>Roll a 6-sided die (1-6)</p>
         </div>
       </div>
 
       <div class="picker-actions">
         <button
+          v-if="presetType === 'custom'"
           @click="addItem"
           class="action-button add-item-button"
         >
@@ -46,7 +97,7 @@
         </button>
         <button
           @click="pickRandom"
-          :disabled="items.length === 0 || items.every(i => !i.trim())"
+          :disabled="!canPick"
           class="action-button pick-button"
         >
           Pick Random
@@ -63,11 +114,26 @@
 </template>
 
 <script setup>
-import { ref, nextTick } from 'vue'
+import { ref, nextTick, computed } from 'vue'
 
 const items = ref([''])
 const selectedItem = ref('')
 const itemsListRef = ref(null)
+const presetType = ref('number')
+const numberMin = ref(1)
+const numberMax = ref(100)
+const isPicking = ref(false)
+
+const canPick = computed(() => {
+  if (presetType.value === 'custom') {
+    return items.value.length > 0 && items.value.some(i => i.trim())
+  }
+  if (presetType.value === 'number') {
+    return numberMin.value !== null && numberMax.value !== null && 
+           numberMin.value < numberMax.value
+  }
+  return true // coin and dice are always valid
+})
 
 const addItem = async () => {
   items.value.push('')
@@ -87,23 +153,37 @@ const removeItem = (index) => {
   selectedItem.value = ''
 }
 
-const isPicking = ref(false)
-
 const pickRandom = async () => {
-  const validItems = items.value.filter(item => item.trim())
-  if (validItems.length > 0) {
-    // Show picking animation
-    isPicking.value = true
-    selectedItem.value = ''
-    
-    // Brief delay to show animation
-    await new Promise(resolve => setTimeout(resolve, 500))
-    
-    // Select random item
-    const randomIndex = Math.floor(Math.random() * validItems.length)
-    selectedItem.value = validItems[randomIndex]
-    isPicking.value = false
+  if (!canPick.value) return
+  
+  // Show picking animation
+  isPicking.value = true
+  selectedItem.value = ''
+  
+  // Brief delay to show animation
+  await new Promise(resolve => setTimeout(resolve, 500))
+  
+  // Handle different preset types
+  if (presetType.value === 'custom') {
+    const validItems = items.value.filter(item => item.trim())
+    if (validItems.length > 0) {
+      const randomIndex = Math.floor(Math.random() * validItems.length)
+      selectedItem.value = validItems[randomIndex]
+    }
+  } else if (presetType.value === 'number') {
+    const min = Math.min(numberMin.value, numberMax.value)
+    const max = Math.max(numberMin.value, numberMax.value)
+    const randomNum = Math.floor(Math.random() * (max - min + 1)) + min
+    selectedItem.value = randomNum.toString()
+  } else if (presetType.value === 'coin') {
+    const result = Math.random() < 0.5 ? 'Heads' : 'Tails'
+    selectedItem.value = result
+  } else if (presetType.value === 'dice') {
+    const roll = Math.floor(Math.random() * 6) + 1
+    selectedItem.value = roll.toString()
   }
+  
+  isPicking.value = false
 }
 
 const clearSelection = () => {
@@ -305,6 +385,104 @@ const clearSelection = () => {
 .clear-button {
   background: #f0f0f0;
   color: #000;
+}
+
+.preset-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.preset-options {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.preset-option {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.preset-label {
+  font-size: 0.875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #000;
+}
+
+.preset-select {
+  padding: 0.5rem;
+  border: 3px solid #000;
+  font-size: 0.875rem;
+  font-weight: 600;
+  box-shadow: 3px 3px 0px 0px #000;
+  transition: all 0.1s ease;
+  background: white;
+  color: #000;
+  cursor: pointer;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.preset-select:focus {
+  outline: none;
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0px 0px #000;
+}
+
+.preset-config {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.range-inputs {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.range-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+.range-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #000;
+}
+
+.range-input {
+  padding: 0.5rem;
+  border: 3px solid #000;
+  font-size: 0.875rem;
+  font-weight: 600;
+  box-shadow: 3px 3px 0px 0px #000;
+  transition: all 0.1s ease;
+  background: white;
+  color: #000;
+}
+
+.range-input:focus {
+  outline: none;
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0px 0px #000;
+}
+
+.preset-info {
+  padding: 0.75rem;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #666;
+  text-align: center;
 }
 
 @media (max-width: 640px) {

@@ -36,7 +36,7 @@
 
       <div class="action-buttons">
         <button
-          v-if="!isRunning && timeRemaining > 0"
+          v-if="!isRunning && !isPaused && timeRemaining > 0"
           @click="startTimer"
           class="action-button start-button"
         >
@@ -412,7 +412,7 @@ onUnmounted(() => {
   font-weight: 700;
   text-transform: uppercase;
   border: 3px solid #000;
-  background: #000;
+  background: #9C27B0;
   color: white;
   cursor: pointer;
   box-shadow: 4px 4px 0px 0px #000;

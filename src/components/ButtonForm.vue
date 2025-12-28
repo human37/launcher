@@ -237,7 +237,7 @@ const close = () => {
 }
 
 .btn-primary {
-  background: #000;
+  background: #9C27B0;
   color: white;
   box-shadow: 6px 6px 0px 0px #000;
 }
