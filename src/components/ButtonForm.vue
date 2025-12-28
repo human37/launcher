@@ -19,32 +19,79 @@
         </div>
 
         <div class="form-group">
+          <label class="form-label">Link Type</label>
+          <select v-model="linkType" class="form-input">
+            <option value="url">URL</option>
+            <option value="file">Local File</option>
+          </select>
+        </div>
+
+        <div v-if="linkType === 'url'" class="form-group">
           <label class="form-label">URL</label>
           <input
             v-model="formData.url"
             type="url"
             class="form-input"
             placeholder="https://example.com"
-            required
+            :required="linkType === 'url'"
           />
+        </div>
+
+        <div v-if="linkType === 'file'" class="form-group">
+          <label class="form-label">File</label>
+          <input
+            @change="handleFileSelect"
+            type="file"
+            class="form-input"
+            :required="linkType === 'file'"
+            ref="fileInput"
+          />
+          <div v-if="formData.fileName" class="file-info">
+            Selected: {{ formData.fileName }}
+            <button type="button" @click="clearFile" class="clear-file-btn">×</button>
+          </div>
         </div>
 
         <div class="form-group">
           <label class="form-label">Color</label>
-          <div class="color-picker-container">
-            <input
-              v-model="formData.color"
-              type="color"
-              class="color-input"
-            />
-            <input
-              v-model="formData.color"
-              type="text"
-              class="form-input color-text"
-              placeholder="#000000"
-            />
+          <div class="preset-colors">
+            <button
+              v-for="presetColor in presetColors"
+              :key="presetColor.value"
+              type="button"
+              @click="formData.color = presetColor.value"
+              class="preset-color-button"
+              :class="{ active: formData.color === presetColor.value }"
+              :style="{ backgroundColor: presetColor.value }"
+              :title="presetColor.name"
+            >
+              <span v-if="formData.color === presetColor.value" class="checkmark">✓</span>
+            </button>
+            <button
+              type="button"
+              @click="showCustomColor = !showCustomColor"
+              class="preset-color-button custom-color-toggle"
+              :class="{ active: showCustomColor }"
+              title="Custom Color"
+            >
+              🎨
+            </button>
           </div>
-          <div class="color-preview" :style="{ backgroundColor: formData.color }"></div>
+          <div v-if="showCustomColor" class="custom-color-picker">
+            <div class="color-picker-container">
+              <input
+                v-model="formData.color"
+                type="color"
+                class="color-input"
+              />
+              <input
+                v-model="formData.color"
+                type="text"
+                class="form-input color-text"
+                placeholder="#000000"
+              />
+            </div>
+          </div>
         </div>
 
         <div class="form-actions">
@@ -58,6 +105,7 @@
 
 <script setup>
 import { ref, watch } from 'vue'
+import { saveFile } from '../composables/fileStorage.js'
 
 const props = defineProps({
   editingButton: {
@@ -68,27 +116,103 @@ const props = defineProps({
 
 const emit = defineEmits(['submit', 'close'])
 
+const linkType = ref('url')
+const fileInput = ref(null)
+const showCustomColor = ref(false)
+
+const presetColors = [
+  { name: 'Black', value: '#000000' },
+  { name: 'Purple', value: '#9C27B0' },
+  { name: 'Yellow', value: '#FFE66D' },
+  { name: 'Pink', value: '#FF6B9D' },
+  { name: 'Blue', value: '#4ECDC4' },
+  { name: 'Green', value: '#95E1D3' },
+  { name: 'Orange', value: '#FFA07A' },
+  { name: 'Red', value: '#FF6B6B' }
+]
+
 const formData = ref({
   label: '',
   url: '',
-  color: '#000000'
+  color: '#000000',
+  fileId: null,
+  fileName: null,
+  fileType: null
 })
 
 watch(() => props.editingButton, (newButton) => {
   if (newButton) {
+    linkType.value = newButton.fileId ? 'file' : 'url'
+    const color = newButton.color || '#000000'
+    // Check if color is a preset, otherwise show custom picker
+    showCustomColor.value = !presetColors.some(p => p.value === color)
     formData.value = {
       label: newButton.label || '',
       url: newButton.url || '',
-      color: newButton.color || '#000000'
+      color: color,
+      fileId: newButton.fileId || null,
+      fileName: newButton.fileName || null,
+      fileType: newButton.fileType || null
     }
   } else {
+    linkType.value = 'url'
+    showCustomColor.value = false
     formData.value = {
       label: '',
       url: '',
-      color: '#000000'
+      color: '#000000',
+      fileId: null,
+      fileName: null,
+      fileType: null
+    }
+    if (fileInput.value) {
+      fileInput.value.value = ''
     }
   }
 }, { immediate: true })
+
+const handleFileSelect = async (event) => {
+  const file = event.target.files[0]
+  if (file) {
+    // Convert file to base64 for storage in IndexedDB
+    const reader = new FileReader()
+    reader.onload = async (e) => {
+      const fileId = formData.value.fileId || `file_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      const fileData = e.target.result
+      
+      try {
+        // Store file in IndexedDB
+        await saveFile(fileId, fileData, file.name, file.type)
+        formData.value.fileId = fileId
+        formData.value.fileName = file.name
+        formData.value.fileType = file.type
+        // Don't store fileData in formData - it's in IndexedDB now
+        formData.value.fileData = null
+      } catch (error) {
+        console.error('Error saving file:', error)
+        alert('Error saving file. Please try again.')
+      }
+    }
+    reader.readAsDataURL(file)
+  }
+}
+
+const clearFile = async () => {
+  if (formData.value.fileId) {
+    try {
+      const { deleteFile } = await import('../composables/fileStorage.js')
+      await deleteFile(formData.value.fileId)
+    } catch (error) {
+      console.error('Error deleting file:', error)
+    }
+  }
+  formData.value.fileId = null
+  formData.value.fileName = null
+  formData.value.fileType = null
+  if (fileInput.value) {
+    fileInput.value.value = ''
+  }
+}
 
 const handleSubmit = () => {
   emit('submit', { ...formData.value })
@@ -193,6 +317,58 @@ const close = () => {
   box-shadow: 2px 2px 0px 0px #000;
 }
 
+.preset-colors {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.preset-color-button {
+  width: 100%;
+  aspect-ratio: 1;
+  border: 3px solid #000;
+  cursor: pointer;
+  box-shadow: 4px 4px 0px 0px #000;
+  transition: all 0.1s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  position: relative;
+  font-weight: bold;
+}
+
+.preset-color-button:hover {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0px 0px #000;
+}
+
+.preset-color-button.active {
+  transform: translate(3px, 3px);
+  box-shadow: 1px 1px 0px 0px #000;
+  border-width: 4px;
+}
+
+.preset-color-button .checkmark {
+  color: white;
+  text-shadow: 2px 2px 0px #000;
+  font-size: 1.5rem;
+}
+
+.custom-color-toggle {
+  background: linear-gradient(45deg, #ff6b9d, #4ecdc4, #ffe66d);
+  color: #000;
+}
+
+.custom-color-picker {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #f0f0f0;
+  border: 3px solid #000;
+  box-shadow: 4px 4px 0px 0px #000;
+}
+
 .color-picker-container {
   display: flex;
   gap: 0.5rem;
@@ -216,6 +392,39 @@ const close = () => {
   height: 60px;
   border: 3px solid #000;
   box-shadow: 4px 4px 0px 0px #000;
+}
+
+.file-info {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: #f0f0f0;
+  border: 2px solid #000;
+  font-size: 0.875rem;
+  font-weight: 600;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.clear-file-btn {
+  background: #ff0000;
+  color: white;
+  border: 2px solid #000;
+  width: 24px;
+  height: 24px;
+  font-size: 18px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 2px 2px 0px 0px #000;
+  transition: all 0.1s ease;
+}
+
+.clear-file-btn:hover {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0px 0px #000;
 }
 
 .form-actions {

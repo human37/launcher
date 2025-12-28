@@ -71,7 +71,7 @@ const showForm = computed(() => showAddForm.value || editingButton.value !== nul
 const handleButtonClick = (button) => {
   // Only open URL if not in edit mode
   if (!editMode.value) {
-    openUrl(button.url)
+    openUrl(button.url, button.fileId, button.fileType, button.fileName)
   }
 }
 

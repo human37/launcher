@@ -96,15 +96,52 @@ export function useLauncher() {
     }
   }
 
-  const deleteButton = (id) => {
+  const deleteButton = async (id) => {
     const index = buttons.value.findIndex(b => b.id === id)
     if (index !== -1) {
+      const button = buttons.value[index]
+      // Delete associated file from IndexedDB if it exists
+      if (button.fileId) {
+        try {
+          const { deleteFile } = await import('./fileStorage.js')
+          await deleteFile(button.fileId)
+        } catch (error) {
+          console.error('Error deleting file from IndexedDB:', error)
+        }
+      }
       buttons.value.splice(index, 1)
     }
   }
 
-  const openUrl = (url) => {
-    if (url && url !== '#') {
+  const openUrl = async (url, fileId, fileType, fileName) => {
+    if (fileId) {
+      // Handle local file - retrieve from IndexedDB and create blob URL
+      try {
+        const { getFile } = await import('./fileStorage.js')
+        const fileRecord = await getFile(fileId)
+
+        // Convert base64 to blob
+        const base64Data = fileRecord.data.split(',')[1] || fileRecord.data
+        const byteCharacters = atob(base64Data)
+        const byteNumbers = new Array(byteCharacters.length)
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i)
+        }
+        const byteArray = new Uint8Array(byteNumbers)
+        const blob = new Blob([byteArray], { type: fileRecord.type || fileType || 'application/octet-stream' })
+
+        // Create blob URL and open it
+        const blobUrl = URL.createObjectURL(blob)
+        window.open(blobUrl, '_blank', 'noopener,noreferrer')
+
+        // Clean up blob URL after a delay (browser will handle it when tab closes)
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000)
+      } catch (error) {
+        console.error('Error opening file:', error)
+        alert(`Error opening file: ${fileName || 'Unknown file'}`)
+      }
+    } else if (url && url !== '#') {
+  // Handle regular URL
       window.open(url, '_blank', 'noopener,noreferrer')
     }
   }

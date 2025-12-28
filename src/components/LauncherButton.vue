@@ -11,9 +11,12 @@
     <button
       :style="buttonStyle"
       @click="handleClick"
+      @mousedown="handleButtonPress"
+      @mouseup="handleButtonRelease"
+      @mouseleave="handleButtonRelease"
       @contextmenu.prevent="handleRightClick"
-      @mousedown="handleMouseDown"
       class="neobrutalism-button"
+      :class="{ 'pressed': isPressed }"
     >
       <span class="button-label">{{ button.label }}</span>
       <span v-if="editMode" class="delete-icon" @click.stop="handleDelete">×</span>
@@ -65,6 +68,7 @@ const emit = defineEmits(['click', 'delete', 'edit', 'update'])
 
 const isDragging = ref(false)
 const isResizing = ref(false)
+const isPressed = ref(false)
 const dragStart = ref({ x: 0, y: 0 })
 const resizeStart = ref({ x: 0, y: 0, width: 0, height: 0, direction: '' })
 
@@ -101,10 +105,27 @@ const getContrastColor = (hexColor) => {
   return luminance > 0.5 ? '#000000' : '#FFFFFF'
 }
 
+const handleButtonPress = (e) => {
+  // Don't show press animation in edit mode (will be handled by drag)
+  if (props.editMode) {
+    handleMouseDown(e)
+    return
+  }
+  isPressed.value = true
+}
+
+const handleButtonRelease = () => {
+  isPressed.value = false
+}
+
 const handleClick = (e) => {
   if (!isDragging.value && !isResizing.value) {
     emit('click', props.button)
   }
+  // Reset press state after a brief delay for visual feedback
+  setTimeout(() => {
+    isPressed.value = false
+  }, 150)
 }
 
 const handleRightClick = () => {
@@ -239,11 +260,16 @@ onUnmounted(() => {
   font-weight: 700;
   text-transform: uppercase;
   cursor: pointer;
-  transition: box-shadow 0.1s ease;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
   font-family: system-ui, -apple-system, sans-serif;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.neobrutalism-button.pressed {
+  transform: translate(4px, 4px);
+  box-shadow: 4px 4px 0px 0px #000 !important;
 }
 
 .button-container:not(.dragging):not(.resizing) .neobrutalism-button {
