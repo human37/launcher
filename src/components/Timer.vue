@@ -114,7 +114,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+
+const STORAGE_KEY = 'timer-state'
+const GRACE_PERIOD = 10 // seconds - don't beep if timer finished more than this ago
 
 const presets = [0.5, 1, 5, 10, 30]
 const selectedPreset = ref(null)
@@ -125,6 +128,7 @@ const isPaused = ref(false)
 const hasStarted = ref(false)
 const isFullscreen = ref(false)
 const isBeeping = ref(false)
+const endTimestamp = ref(null)
 let intervalId = null
 let beepInterval = null
 
@@ -134,13 +138,69 @@ const formattedTime = computed(() => {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
 })
 
+const saveState = () => {
+  if (endTimestamp.value) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      endTimestamp: endTimestamp.value,
+      isRunning: isRunning.value,
+      isPaused: isPaused.value
+    }))
+  } else {
+    localStorage.removeItem(STORAGE_KEY)
+  }
+}
+
+const loadState = () => {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    if (!saved) return
+    
+    const state = JSON.parse(saved)
+    if (!state.endTimestamp) return
+    
+    const now = Date.now()
+    const elapsed = (now - state.endTimestamp) / 1000 // seconds since timer should have finished
+    if (elapsed > GRACE_PERIOD) {
+      // if timer finished more than grace period ago, just clear it silently
+      localStorage.removeItem(STORAGE_KEY)
+      return
+    }
+    
+    const remaining = Math.max(0, Math.floor((state.endTimestamp - now) / 1000))
+    
+    if (remaining > 0) {
+      timeRemaining.value = remaining
+      endTimestamp.value = state.endTimestamp
+      hasStarted.value = true
+      if (state.isRunning) {
+        isRunning.value = true
+        isPaused.value = false
+        startInterval()
+      } else if (state.isPaused) {
+        isRunning.value = false
+        isPaused.value = true
+      }
+    } else {
+      timeRemaining.value = 0
+      hasStarted.value = true
+      startBeeping()
+      localStorage.removeItem(STORAGE_KEY)
+      endTimestamp.value = null
+    }
+  } catch (error) {
+    console.error('Error loading timer state:', error)
+  }
+}
+
 const setTime = (minutes) => {
   selectedPreset.value = minutes
   timeRemaining.value = minutes * 60
   hasStarted.value = false
   isRunning.value = false
   isPaused.value = false
+  endTimestamp.value = null
   stopTimer()
+  saveState()
 }
 
 const setCustomTime = () => {
@@ -150,16 +210,20 @@ const setCustomTime = () => {
     hasStarted.value = false
     isRunning.value = false
     isPaused.value = false
+    endTimestamp.value = null
     stopTimer()
+    saveState()
   }
 }
 
 const startTimer = () => {
   if (timeRemaining.value > 0) {
+    endTimestamp.value = Date.now() + (timeRemaining.value * 1000)
     isRunning.value = true
     isPaused.value = false
     hasStarted.value = true
     startInterval()
+    saveState()
   }
 }
 
@@ -167,12 +231,15 @@ const pauseTimer = () => {
   isRunning.value = false
   isPaused.value = true
   stopTimer()
+  saveState()
 }
 
 const resumeTimer = () => {
+  endTimestamp.value = Date.now() + (timeRemaining.value * 1000)
   isRunning.value = true
   isPaused.value = false
   startInterval()
+  saveState()
 }
 
 const resetTimer = () => {
@@ -183,6 +250,8 @@ const resetTimer = () => {
   isPaused.value = false
   hasStarted.value = false
   selectedPreset.value = null
+  endTimestamp.value = null
+  saveState()
 }
 
 const playBeep = () => {
@@ -221,7 +290,6 @@ const stopBeeping = () => {
     beepInterval = null
   }
   isBeeping.value = false
-  // Reset the timer state so the alert disappears
   hasStarted.value = false
 }
 
@@ -229,29 +297,42 @@ const startInterval = () => {
   stopTimer()
   stopBeeping()
   intervalId = setInterval(() => {
-    if (timeRemaining.value > 0) {
-      timeRemaining.value--
+    if (endTimestamp.value) {
+      const remaining = Math.max(0, Math.floor((endTimestamp.value - Date.now()) / 1000))
+      timeRemaining.value = remaining
+      
+      if (remaining === 0) {
+        stopTimer()
+        isRunning.value = false
+        isPaused.value = false
+        endTimestamp.value = null
+        saveState()
+        startBeeping()
+        // Show browser notification if permission granted
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification('Timer Complete!', {
+            body: 'Your timer has finished.',
+            icon: '⏰'
+          })
+        } else if ('Notification' in window && Notification.permission !== 'denied') {
+          Notification.requestPermission().then(permission => {
+            if (permission === 'granted') {
+              new Notification('Timer Complete!', {
+                body: 'Your timer has finished.',
+                icon: '⏰'
+              })
+            }
+          })
+        }
+      }
     } else {
-      stopTimer()
-      isRunning.value = false
-      isPaused.value = false
-      // Start beeping when timer completes
-      startBeeping()
-      // Show browser notification if permission granted
-      if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification('Timer Complete!', {
-          body: 'Your timer has finished.',
-          icon: '⏰'
-        })
-      } else if ('Notification' in window && Notification.permission !== 'denied') {
-        Notification.requestPermission().then(permission => {
-          if (permission === 'granted') {
-            new Notification('Timer Complete!', {
-              body: 'Your timer has finished.',
-              icon: '⏰'
-            })
-          }
-        })
+      if (timeRemaining.value > 0) {
+        timeRemaining.value--
+      } else {
+        stopTimer()
+        isRunning.value = false
+        isPaused.value = false
+        startBeeping()
       }
     }
   }, 1000)
@@ -263,6 +344,10 @@ const stopTimer = () => {
     intervalId = null
   }
 }
+
+onMounted(() => {
+  loadState()
+})
 
 onUnmounted(() => {
   stopTimer()
@@ -530,10 +615,18 @@ onUnmounted(() => {
 .reset-button.stop-button {
   background: #ff0000;
   color: white;
-  padding: 1.5rem 3rem;
+  padding: 0.75rem 1.5rem;
   animation: stopButtonAnimation 1s ease-in-out infinite;
-  font-size: 2.25rem;
+  font-size: 1.125rem;
   font-weight: 900;
+}
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  .reset-button.stop-button {
+    flex: 0 1 auto;
+    min-width: auto;
+    max-width: 200px;
+  }
 }
 
 .action-button:hover {

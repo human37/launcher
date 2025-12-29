@@ -4,8 +4,7 @@
     
     <div class="picker-display">
       <div v-if="isPicking" class="picking-animation">
-        <div class="spinner">🎲</div>
-        <div>Picking...</div>
+        <div class="spinner">{{ pickerIcon }}</div>
       </div>
       <div v-else-if="selectedItem" class="selected-item">
         {{ selectedItem }}
@@ -135,6 +134,21 @@ const canPick = computed(() => {
   return true // coin and dice are always valid
 })
 
+const pickerIcon = computed(() => {
+  switch (presetType.value) {
+    case 'dice':
+      return '🎲'
+    case 'coin':
+      return '🪙'
+    case 'number':
+      return '🔢'
+    case 'custom':
+      return '⏳'
+    default:
+      return '🎲'
+  }
+})
+
 const addItem = async () => {
   items.value.push('')
   // Wait for DOM to update, then scroll to bottom
@@ -258,14 +272,8 @@ const clearSelection = () => {
 
 .picking-animation {
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  font-size: 1rem;
-  font-weight: 700;
-  color: #9C27B0;
-  text-transform: uppercase;
 }
 
 .spinner {
