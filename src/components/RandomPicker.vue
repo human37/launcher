@@ -237,7 +237,8 @@ const clearSelection = () => {
   
   .picker-display {
     margin-bottom: 0.875rem;
-    min-height: 35px;
+    min-height: 55px;
+    height: 55px;
   }
 }
 
@@ -253,8 +254,10 @@ const clearSelection = () => {
 .picker-display {
   display: flex;
   justify-content: center;
+  align-items: center;
   margin-bottom: 1rem;
-  min-height: 40px;
+  min-height: 60px;
+  height: 60px;
 }
 
 .selected-item {
@@ -274,6 +277,8 @@ const clearSelection = () => {
   display: flex;
   align-items: center;
   justify-content: center;
+  height: 100%;
+  width: 100%;
 }
 
 .spinner {
